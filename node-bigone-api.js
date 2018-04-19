@@ -57,7 +57,14 @@ module.exports = (function() {
 
             if (response && response.statusCode !== 200) return callback(response, {});
 
-            return callback(null, JSON.parse(body));
+            let data, message;
+            try {
+                data = JSON.parse(body);
+            } catch (err) {
+                data = {};
+                message = err.message;
+            }
+            return callback(message, data);
         });
     };
     ////////////////////////////
