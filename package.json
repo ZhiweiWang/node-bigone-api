@@ -18,6 +18,7 @@
   "homepage": "https://github.com/ZhiweiWang/node-bigone-api#readme",
   "dependencies": {
     "md5": "^2.2.1",
+    "moment": "^2.22.2",
     "request": "^2.85.0",
     "string-hash": "^1.1.3",
     "underscore": "^1.8.3",

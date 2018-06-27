@@ -9,74 +9,75 @@
 module.exports = (function() {
     "use strict";
     const request = require("request");
-    const crypto = require("crypto");
+    const moment = require("moment");
     const file = require("fs");
-    const stringHash = require("string-hash");
-    const md5 = require("md5");
-    const _ = require("underscore");
-    const util = require("util");
-    const VError = require("verror");
-    const uuidv4 = require("uuid/v4");
-    const base = "https://api.big.one/";
+    const base = "https://big.one/api/v2/";
+    const base_kline = "https://b1.run/api/graphql";
     const userAgent =
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_3) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/65.0.3325.183 Safari/537.36";
-    const contentType = "application/json";
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/65.0.3325.183 Safari/537.36";
     const default_options = {
         timeout: 30000,
         reconnect: true,
         verbose: false,
         APIKey: false,
         DeviceID: false,
-        test: false,
         log: function() {
             console.log(Array.prototype.slice.call(arguments));
         }
     };
     let options = default_options;
 
-    const publicRequest = function(method, params, callback) {
+    const publicRequest = function(url, params, callback, method = "GET", payload = false) {
+        // let functionName = "publicRequest()";
         if (!params) params = {};
 
-        let url = `${base}${method}`;
-
-        let opt = {
+        let req_options = {
             url,
-            qs: params,
-            method: "GET",
-            timeout: options.recvWindow,
-            agent: false,
+            method,
             headers: {
-                "User-Agent": userAgent,
-                "Content-type": contentType
-            }
+                "User-Agent": userAgent
+            },
+            timeout: options.timeout,
+            qs: params,
+            json: true
         };
-        request(opt, function(error, response, body) {
+        if (payload) req_options.body = payload;
+
+        executeRequest(req_options, callback);
+    };
+
+    const executeRequest = function(req_options, callback) {
+        // let functionName = "executeRequest()";
+
+        request(req_options, function(err, response, body) {
             if (!callback) return;
 
-            if (error) return callback(error, {});
+            if (err) return callback(err, {});
 
             if (response && response.statusCode !== 200) return callback(response, {});
 
-            let data, message;
-            try {
-                data = JSON.parse(body);
-            } catch (err) {
-                data = {};
-                message = err.message;
-            }
-            return callback(message, data);
+            return callback(false, body);
         });
     };
     ////////////////////////////
     return {
-        markets: function(callback, market = false) {
+        markets: function(callback) {
             if (!callback) return;
-            let params = {};
-            if (market) {
-                publicRequest(`markets/${market.toUpperCase()}`, params, callback);
-            } else {
-                publicRequest("markets", params, callback);
-            }
+            publicRequest(base + "markets", false, callback);
+        },
+        kline: function(marketId, period, startTime, endTime, callback) {
+            if (!callback) return;
+            if (!endTime) endTime = moment().toISOString();
+            if (!startTime)
+                startTime = moment(endTime)
+                    .subtract(10, "day")
+                    .toISOString();
+            let payload = {
+                variables: { marketId, period, startTime, endTime },
+                query:
+                    "query ($marketId: String!, $period: BarPeriod!, $startTime: DateTime, $endTime: DateTime) {\n  bars(marketUuid: $marketId, period: $period, startTime: $startTime, endTime: $endTime, order: DESC, limit: 1000) {\n    time\n    open\n    high\n    low\n    close\n    volume\n    __typename\n  }\n}\n"
+            };
+            publicRequest(base_kline, false, callback, "POST", payload);
         },
         setOption: function(key, value) {
             options[key] = value;
@@ -86,9 +87,7 @@ module.exports = (function() {
                 // Pass json config filename
                 opt = JSON.parse(file.readFileSync(opt));
             }
-            for (let key in opt) {
-                if (default_options.hasOwnProperty(key)) options[key] = opt[key];
-            }
+            options = Object.assign(default_options, opt);
 
             if (callback) callback();
         }
